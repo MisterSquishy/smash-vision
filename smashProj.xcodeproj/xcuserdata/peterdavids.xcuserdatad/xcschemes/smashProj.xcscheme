@@ -58,6 +58,16 @@
             ReferencedContainer = "container:smashProj.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <CommandLineArguments>
+         <CommandLineArgument
+            argument = "/Users/peterdavids/Desktop/Projects/smashProj/smashProj/pikachu.png"
+            isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "/Users/peterdavids/Desktop/Projects/smashProj/smashProj/match.mp4"
+            isEnabled = "YES">
+         </CommandLineArgument>
+      </CommandLineArguments>
       <AdditionalOptions>
       </AdditionalOptions>
    </LaunchAction>
