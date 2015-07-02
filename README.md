@@ -37,23 +37,5 @@
 -	DI can't be identified (right?)
 -	Fast inputs (worst case: 7 game frames btw youtube frames)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Progress:
-1. 
-	Working on basic object detection, identifying pikachu and fox in game starting positions
+*Progress:*
+-   Working on basic object detection, identifying pikachu and fox in game starting positions
