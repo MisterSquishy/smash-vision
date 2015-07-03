@@ -1,203 +1,296 @@
 #include "ObjectTracker.h"
 
-cv::Point first;
-cv::Point second;
-bool regionSelected = false;
+std::vector<cv::KeyPoint> detectKeypoints( int minHessian, cv::Mat img , std::vector<cv::Mat> mask , bool debug = false);
+
+cv::Mat getDescriptors( int minHessian, cv::Mat img , std::vector<cv::KeyPoint> keypoints , bool debug = false);
+
+std::vector< cv::DMatch > match( cv::Mat descriptors_object , cv::Mat descriptors_scene , bool debug = false);
+
+cv::Mat localize( cv::Mat img_object , std::vector<cv::KeyPoint> keypoints_object , cv::Mat img_scene , std::vector<cv::KeyPoint> keypoints_scene , std::vector< cv::DMatch > matches, bool debug = false);
+
+int errorFlag = 0;                  //error flag
+const int STARTFRAME = 172;         //what frame should we start on?
+float avgDistance;                  //should we find a match, how good is it?
 
 int main(int argc, char **argv)
 {
-    if (argc != 3)
+    if (argc != 3)                  //user fucked up arguments
     {
        printf("pass 2 arguments dude");
        return 0;
     }
-    std::string filename = std::string(argv[2]);
     
-    vision::ObjectTracker tracker(filename);
+    std::string filename = std::string(argv[2]);        //get video filename
     
-    cv::Mat img_object = cv::imread( argv[1] , -1 );
-    cv::Mat img_scene = tracker.getCurrentFrame(); //note: axe vs silentwolf starts around frame 170
+    vision::ObjectTracker tracker(filename);            //init tracker, will give us img_scene values
     
+    cv::Mat img_object = cv::imread( argv[1] , -1 );    //read image w/ alpha channel
+    cv::Mat img_scene = tracker.getCurrentFrame();      //img_scene points to first frame
+    
+    std::vector<cv::Mat> null;
     std::vector<cv::Mat> ch;
-    split(img_object, ch); //set up mask to pass to detector
+    split(img_object, ch);                              //set up mask to pass to detector
     
-    while(tracker.getCurrentFrameNumber() < 170){//DEBUG
+    while(tracker.getCurrentFrameNumber() < STARTFRAME){//loop until you get to the frame you're interested in
         tracker.nextFrame();
     }
     
     while(true) //iterate over frames
     {
         //-- Step 1: Detect the keypoints using SURF Detector
-        int minHessian = 1;
+        std::vector<cv::KeyPoint> keypoints_object = detectKeypoints( 1 , img_object , ch );
+        std::vector<cv::KeyPoint> keypoints_scene = detectKeypoints( 1 , img_scene , null);
         
-        using namespace cv::xfeatures2d;
+        //cornerHarrisDemo(0, argv[1], 0); still exploring this method to make keypoints more robust
         
-        cv::Ptr<SURF> detector = SURF::create( minHessian );
+        switch(errorFlag){
+            case 0 : break;
+            case 1 :
+                std::cout << "No keypoints found...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
+                break;
+        }
+        if(errorFlag > 0){
+            errorFlag = 0;
+            tracker.nextFrame();
+            img_scene = tracker.getCurrentFrame();
+            continue;
+        }
         
-        using namespace cv;
-        
-        std::vector<KeyPoint> keypoints_object, keypoints_scene;
-        
-        detector->detect( img_object, keypoints_object , ch[3] );
-        detector->detect( img_scene, keypoints_scene );
-        
-        /*
-         //show object keypoints; useful if you just want to see how SURF is doing
-        Mat img_keypoints_1;
-        cv::cvtColor(img_object , img_object , CV_RGBA2RGB);
-        drawKeypoints( img_object, keypoints_object, img_keypoints_1, Scalar::all(-1), DrawMatchesFlags::DEFAULT );
-        imshow("keypoints", img_keypoints_1 );
-        waitKey(0);
-        return 0;
-         */
-        
-        
-        //cornerHarrisDemo(0, argv[1], 0); still exploring this to make keypoints more robust
-        
-
         //-- Step 2: Calculate descriptors using SURF extractor
-        using namespace cv::xfeatures2d;
         
-        Ptr<SURF> extractor = SURF::create( minHessian );
+        cv::Mat descriptors_object = getDescriptors( 1, img_object, keypoints_object , false );
+        cv::Mat descriptors_scene = getDescriptors( 1, img_scene, keypoints_scene , false );
         
-        using namespace cv;
-        
-        Mat descriptors_object, descriptors_scene;
-        
-        extractor->compute( img_object, keypoints_object, descriptors_object );
-        extractor->compute( img_scene, keypoints_scene, descriptors_scene );
+        switch(errorFlag){
+            case 0 : break;
+            case 1 :
+                std::cout << "No descriptors found...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
+                break;
+        }
+        if(errorFlag > 0){
+            errorFlag = 0;
+            tracker.nextFrame();
+            img_scene = tracker.getCurrentFrame();
+            continue;
+        }
         
         //-- Step 3: Matching descriptor vectors using FLANN matcher
-        FlannBasedMatcher matcher;
         
+        std::vector< cv::DMatch > good_matches = match( descriptors_object, descriptors_scene , false );
         
-        std::vector< DMatch > matches;
-        matcher.match( descriptors_object, descriptors_scene, matches );
-        /*
-         //idea: increase accuracy of matches by only taking bidirectional matches
-        std::vector< DMatch > matchesforward;
-        matcher.match( descriptors_object, descriptors_scene, matchesforward );
-        std::vector< DMatch > matchesbackward;
-        matcher.match( descriptors_scene, descriptors_object, matchesbackward );
-        std::vector< DMatch > matches;
-        sort(matchesforward.begin(), matchesforward.end());
-        sort(matchesbackward.begin(), matchesbackward.end());
-        set_intersection(matchesforward.begin(),matchesforward.end(),matchesbackward.begin(),matchesbackward.end(),back_inserter(matches));
-         */
-        
-        
-        
-        double max_dist = 0; double min_dist = 100;
-        
-        //-- get min and max distances between keypoints
-        for( int i = 0; i < matches.size(); i++ )
-        { double dist = matches[i].distance;
-            if( dist < min_dist ) min_dist = dist;
-            if( dist > max_dist ) max_dist = dist;
-        }
-        
-        //-- ignore matches with distance > 2*min (could be more restrictive here?)
-        std::vector< DMatch > good_matches;
-        
-        max_dist = 0; //reset so we can use it later
-        
-        for( int i = 0; i < descriptors_object.rows; i++ )
-        {   //std::printf("%f\n",matches[i].distance);
-            if( matches[i].distance < 1.5*min_dist )
-                {
-                    good_matches.push_back( matches[i]);
-                    if(matches[i].distance > max_dist){
-                        max_dist = matches[i].distance;
-                    }
-                }
-        }
-        
-        if(good_matches.size() == 0){
+        if(good_matches.size() == 0){//add better error handling
             std::cout << "No good matches...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
             tracker.nextFrame();
             img_scene = tracker.getCurrentFrame();
             continue;
         }
         
-        Mat img_matches, temp;
-        temp = cv::imread( argv[1] );
-        try{
-        drawMatches( temp, keypoints_object, img_scene, keypoints_scene,
-                    good_matches, img_matches, Scalar::all(-1), Scalar::all(-1),
-                    std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
+        switch(errorFlag){
+            case 0 : break;
+            case 1 :
+                std::cout << "No matches found...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
+                break;
+            case 2:
+                std::cout << "No good matches found...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
+                break;
         }
-        catch(cv::Exception){ //fucking opencv bug sometimes crashes this, the H.rows == 0 check below will catch this
-            printf("lol\n");
-        }
-        
-        //-- Localize the object
-        std::vector<Point2f> obj;
-        std::vector<Point2f> scene;
-        
-        for( int i = 0; i < good_matches.size(); i++ )
-        {
-            //-- Get the keypoints from the good matches
-            obj.push_back( keypoints_object[ good_matches[i].queryIdx ].pt );
-            scene.push_back( keypoints_scene[ good_matches[i].trainIdx ].pt );
-        }
-        
-        cv::Mat H = findHomography( obj, scene, CV_LMEDS );
-        
-        //-- Get the corners from the object
-        //can i use harriscorners here?
-        std::vector<Point2f> obj_corners(4);
-        obj_corners[0] = cvPoint(0,0); obj_corners[1] = cvPoint( img_object.cols, 0 );
-        obj_corners[2] = cvPoint( img_object.cols, img_object.rows ); obj_corners[3] = cvPoint( 0, img_object.rows );
-        std::vector<Point2f> scene_corners(4);
-        
-        if(H.rows == 0){//sometimes there just isnt any kind of match at all
-            std::cout << "Homography not found...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
+        if(errorFlag > 0){
+            errorFlag = 0;
             tracker.nextFrame();
             img_scene = tracker.getCurrentFrame();
             continue;
         }
         
-        perspectiveTransform( obj_corners, scene_corners, H);
+        //Step 4: Localize matches, generate image
+        cv::Mat img_matches = localize( img_object, keypoints_object, img_scene, keypoints_scene, good_matches );
         
-        IplImage tmp = img_matches;
-        
-        //-- Draw lines between the corners around the object in the scene
-        cvLine( &tmp, scene_corners[0] + Point2f( img_object.cols, 0), scene_corners[1] + Point2f( img_object.cols, 0), Scalar( 50, 100, 255), 4 );
-        cvLine( &tmp, scene_corners[1] + Point2f( img_object.cols, 0), scene_corners[2] + Point2f( img_object.cols, 0), Scalar( 50, 100, 255), 4 );
-        cvLine( &tmp, scene_corners[2] + Point2f( img_object.cols, 0), scene_corners[3] + Point2f( img_object.cols, 0), Scalar( 50, 100, 255), 4 );
-        cvLine( &tmp, scene_corners[3] + Point2f( img_object.cols, 0), scene_corners[0] + Point2f( img_object.cols, 0), Scalar( 50, 100, 255), 4 );
-        
-        
-        
-        //Step 4: display stuff
-        
-        if(tracker.getCurrentFrameNumber() > 170){
-            imshow( "Found a match", img_matches );
-            printf("-- Max dist: %f \n", max_dist );
-            printf("-- Min dist: %f \n", min_dist );
-            for( int i = 0; i < good_matches.size(); i++ )
-            {
-                //-- Get the keypoints from the good matches
-                printf("match %d: distance=%f\n",good_matches[i].queryIdx,good_matches[i].distance);
-            }
-            waitKey(0);
+        switch(errorFlag){
+            case 0 : break;
+            case 1 :
+                std::cout << "OpenCV drawMatches bug...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
+                break;
+            case 2 :
+                std::cout << "No homography found...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
+                break;
         }
-
-        if(max_dist - min_dist < .4) //arbitrary cutoff values that used to work
+        if(errorFlag > 0){
+            errorFlag = 0;
+            tracker.nextFrame();
+            img_scene = tracker.getCurrentFrame();
+            continue;
+        }
+        
+        if(avgDistance < .07) //arbitrary cutoff value. this is problematic because matches with worse homographies can have lower average distance.
         {
             //-- Show detected matches
             imshow( "Found a match", img_matches );
-            printf("-- Max dist: %f \n", max_dist );
-            printf("-- Min dist: %f \n", min_dist );
-            waitKey(0);
+            printf("-- Average distance: %f \n", avgDistance );
+            cv::waitKey(0);
         }
         
+        avgDistance = 0;
         std::cout << "Next frame...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
         tracker.nextFrame();
         img_scene = tracker.getCurrentFrame();
     }
     
     return 0;
+}
+
+std::vector<cv::KeyPoint> detectKeypoints( int minHessian, cv::Mat img , std::vector<cv::Mat> mask , bool debug){
+    using namespace cv::xfeatures2d;
+    cv::Ptr<SURF> detector = SURF::create( minHessian );
+    using namespace cv;
+    
+    std::vector<KeyPoint> keypoints;
+    
+    if( mask.size() > 0 ){
+        detector->detect( img, keypoints , mask[3] );
+    }
+    else{
+        detector->detect( img, keypoints );
+    }
+    
+    if(keypoints.size() == 0){
+        errorFlag = 1;
+    }
+    
+    if(debug){
+        Mat tmp;
+        cv::cvtColor(img , img , CV_RGBA2RGB);
+        drawKeypoints( img, keypoints, tmp, Scalar::all(-1), DrawMatchesFlags::DEFAULT );
+        imshow("keypoints", tmp );
+        waitKey(0);
+    }
+    
+    return keypoints;
+}
+
+cv::Mat getDescriptors( int minHessian, cv::Mat img , std::vector<cv::KeyPoint> keypoints , bool debug){
+    using namespace cv::xfeatures2d;
+    cv::Ptr<SURF> extractor = SURF::create( minHessian );
+    using namespace cv;
+    
+    cv::Mat descriptors;
+    extractor->compute( img, keypoints, descriptors );
+    
+    if(descriptors.size == 0){
+        errorFlag = 1;
+    }
+    
+    if(debug){
+        imshow("descriptors" , descriptors);
+        waitKey(0);
+    }
+    return descriptors;
+}
+
+std::vector< cv::DMatch > match( cv::Mat descriptors_object , cv::Mat descriptors_scene , bool debug){
+    cv::FlannBasedMatcher matcher;
+    
+    std::vector< cv::DMatch > matches;
+    
+    matcher.match( descriptors_object, descriptors_scene, matches );
+    /*
+     //idea: increase accuracy of matches by only taking bidirectional matches
+     std::vector< DMatch > matchesforward;
+     matcher.match( descriptors_object, descriptors_scene, matchesforward );
+     std::vector< DMatch > matchesbackward;
+     matcher.match( descriptors_scene, descriptors_object, matchesbackward );
+     std::vector< DMatch > matches;
+     sort(matchesforward.begin(), matchesforward.end());
+     sort(matchesbackward.begin(), matchesbackward.end());
+     set_intersection(matchesforward.begin(),matchesforward.end(),matchesbackward.begin(),matchesbackward.end(),back_inserter(matches));
+     */
+    
+    if(matches.size() == 0){
+        errorFlag = 1;
+    }
+    
+    double max_dist = 0; double min_dist = 100;
+    
+    //-- get min and max distances between keypoints
+    for( int i = 0; i < matches.size(); i++ )
+    { double dist = matches[i].distance;
+        if( dist < min_dist ) min_dist = dist;
+        if( dist > max_dist ) max_dist = dist;
+    }
+    
+    std::vector< cv::DMatch > good_matches;
+    
+    for( int i = 0; i < descriptors_object.rows; i++ )
+    {
+        if( matches[i].distance < 2*min_dist )
+        {
+            good_matches.push_back( matches[i]);
+            avgDistance += matches[i].distance;
+        }
+    }
+    
+    if(good_matches.size() == 0){
+        avgDistance = 0;
+        errorFlag = 2;
+    }
+    else{
+        avgDistance = avgDistance/descriptors_object.rows;
+    }
+    
+    if(debug){
+        //sorry dude, can't see matches until after localization
+    }
+    
+    return good_matches;
+}
+
+cv::Mat localize( cv::Mat img_object , std::vector<cv::KeyPoint> keypoints_object , cv::Mat img_scene , std::vector<cv::KeyPoint> keypoints_scene , std::vector< cv::DMatch > good_matches, bool debug){
+    cv::Mat temp,img_matches;
+    img_object.convertTo(temp, img_scene.type());
+    try{
+        drawMatches( temp, keypoints_object, img_scene, keypoints_scene, good_matches, img_matches, cv::Scalar::all(-1), cv::Scalar::all(-1), std::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );} //draw the matches
+    catch(cv::Exception){
+        errorFlag = 1;
+    }
+    
+    //-- Localize the object
+    std::vector<cv::Point2f> obj;
+    std::vector<cv::Point2f> scene;
+    
+    for( int i = 0; i < good_matches.size(); i++ )
+    {
+        //-- Get the keypoints from the good matches
+        obj.push_back( keypoints_object[ good_matches[i].queryIdx ].pt );
+        scene.push_back( keypoints_scene[ good_matches[i].trainIdx ].pt );
+    }
+    
+    cv::Mat H = findHomography( obj, scene, CV_LMEDS );
+    
+    //-- Get the corners from the object
+    //can i use harriscorners here?
+    std::vector<cv::Point2f> obj_corners(4);
+    obj_corners[0] = cvPoint(0,0); obj_corners[1] = cvPoint( img_object.cols, 0 );
+    obj_corners[2] = cvPoint( img_object.cols, img_object.rows ); obj_corners[3] = cvPoint( 0, img_object.rows );
+    std::vector<cv::Point2f> scene_corners(4);
+    
+    if(H.rows == 0){//sometimes there just isnt any kind of match at all
+        errorFlag = 2;
+    }
+    
+    perspectiveTransform( obj_corners, scene_corners, H);
+    
+    IplImage tmp = img_matches;
+    
+    //-- Draw lines between the corners around the object in the scene
+    cvLine( &tmp, scene_corners[0] + cv::Point2f( img_object.cols, 0), scene_corners[1] + cv::Point2f( img_object.cols, 0), cvScalar( 50, 100, 255), 4 );
+    cvLine( &tmp, scene_corners[1] + cv::Point2f( img_object.cols, 0), scene_corners[2] + cv::Point2f( img_object.cols, 0), cvScalar( 50, 100, 255), 4 );
+    cvLine( &tmp, scene_corners[2] + cv::Point2f( img_object.cols, 0), scene_corners[3] + cv::Point2f( img_object.cols, 0), cvScalar( 50, 100, 255), 4 );
+    cvLine( &tmp, scene_corners[3] + cv::Point2f( img_object.cols, 0), scene_corners[0] + cv::Point2f( img_object.cols, 0), cvScalar( 50, 100, 255), 4 );
+    
+    if(debug){
+        imshow("matches", img_matches );
+        cv::waitKey(0);
+    }
+    
+    return img_matches;
 }
 
 //still working out what this can do
