@@ -1,5 +1,7 @@
 #include "ObjectTracker.h"
-
+/*
+ ********FUNCTIONS ARE REMNANTS OF THE KEYPOINT MATCHING METHOD. MAY NEED TO FALL BACK ON THIS FOR SCALE INVARIANT MATCHING , SO LEAVING IN********
+ 
 std::vector<cv::KeyPoint> detectKeypoints( int minHessian, cv::Mat img , std::vector<cv::Mat> mask , bool debug = false);
 
 cv::Mat getDescriptors( int minHessian, cv::Mat img , std::vector<cv::KeyPoint> keypoints , bool debug = false);
@@ -7,10 +9,13 @@ cv::Mat getDescriptors( int minHessian, cv::Mat img , std::vector<cv::KeyPoint> 
 std::vector< cv::DMatch > match( cv::Mat descriptors_object , cv::Mat descriptors_scene , bool debug = false);
 
 cv::Mat localize( cv::Mat img_object , std::vector<cv::KeyPoint> keypoints_object , cv::Mat img_scene , std::vector<cv::KeyPoint> keypoints_scene , std::vector< cv::DMatch > matches, bool debug = false);
+*/
+void templateMatch(cv::Mat img, cv::Mat templ);
 
 int errorFlag = 0;                  //error flag
 const int STARTFRAME = 0;         //what frame should we start on?
 float avgDistance;                  //should we find a match, how good is it?
+float THRESHOLD = .00000003;         //minimum acceptable template match accuracy
 
 int main(int argc, char **argv)
 {
@@ -24,19 +29,34 @@ int main(int argc, char **argv)
     
     vision::ObjectTracker tracker(filename);            //init tracker, will give us img_scene values
     
-    cv::Mat img_object = cv::imread( argv[1] , -1 );    //read image w/ alpha channel
+    cv::Mat img_object = cv::imread( argv[1] , 1 );    //read image w/o alpha channel
     cv::Mat img_scene = tracker.getCurrentFrame();      //img_scene points to first frame
     
-    std::vector<cv::Mat> null;
-    std::vector<cv::Mat> ch;
-    split(img_object, ch);                              //set up mask to pass to detector
+    //std::vector<cv::Mat> null;
+    //std::vector<cv::Mat> ch;
+    //split(img_object, ch);                              //set up mask to pass to detector
     
     while(tracker.getCurrentFrameNumber() < STARTFRAME){//loop until you get to the frame you're interested in
         tracker.nextFrame();
     }
     
+    using namespace cv;
+    
+    namedWindow("Frame " + std::to_string(tracker.getCurrentFrameNumber()));
+    
     while(true) //iterate over frames
     {
+        imshow("Frame " + std::to_string(tracker.getCurrentFrameNumber()), img_scene );
+        destroyWindow("Frame " + std::to_string(tracker.getCurrentFrameNumber()-1));
+        templateMatch(img_scene, img_object);
+        std::cout << "Next frame...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
+        tracker.nextFrame();
+        img_scene = tracker.getCurrentFrame();
+        continue;
+        
+        /*
+         ********ALL THE BELOW IS KEYPOINT MATCHING. MAY NEED TO FALL BACK ON THIS SOMEDAY, SO LEAVING IN********
+        
         //-- Step 1: Detect the keypoints using SURF Detector
         std::vector<cv::KeyPoint> keypoints_object = detectKeypoints( 1 , img_object , ch );
         std::vector<cv::KeyPoint> keypoints_scene = detectKeypoints( 1 , img_scene , null);
@@ -129,11 +149,14 @@ int main(int argc, char **argv)
         std::cout << "Next frame...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
         tracker.nextFrame();
         img_scene = tracker.getCurrentFrame();
+        */
     }
     
     return 0;
 }
-
+/*
+ ********FUNCTIONS ARE REMNANTS OF THE KEYPOINT MATCHING METHOD. MAY NEED TO FALL BACK ON THIS SOMEDAY, SO LEAVING IN********
+ 
 std::vector<cv::KeyPoint> detectKeypoints( int minHessian, cv::Mat img , std::vector<cv::Mat> mask , bool debug){
     using namespace cv::xfeatures2d;
     cv::Ptr<SURF> detector = SURF::create( minHessian );
@@ -188,17 +211,17 @@ std::vector< cv::DMatch > match( cv::Mat descriptors_object , cv::Mat descriptor
     std::vector< cv::DMatch > matches;
     
     matcher.match( descriptors_object, descriptors_scene, matches );
-    /*
+ 
      //idea: increase accuracy of matches by only taking bidirectional matches
-     std::vector< DMatch > matchesforward;
-     matcher.match( descriptors_object, descriptors_scene, matchesforward );
-     std::vector< DMatch > matchesbackward;
-     matcher.match( descriptors_scene, descriptors_object, matchesbackward );
-     std::vector< DMatch > matches;
-     sort(matchesforward.begin(), matchesforward.end());
-     sort(matchesbackward.begin(), matchesbackward.end());
-     set_intersection(matchesforward.begin(),matchesforward.end(),matchesbackward.begin(),matchesbackward.end(),back_inserter(matches));
-     */
+     //std::vector< DMatch > matchesforward;
+     //matcher.match( descriptors_object, descriptors_scene, matchesforward );
+     //std::vector< DMatch > matchesbackward;
+     //matcher.match( descriptors_scene, descriptors_object, matchesbackward );
+     //std::vector< DMatch > matches;
+     //sort(matchesforward.begin(), matchesforward.end());
+     //sort(matchesbackward.begin(), matchesbackward.end());
+     //set_intersection(matchesforward.begin(),matchesforward.end(),matchesbackward.begin(),matchesbackward.end(),back_inserter(matches));
+ 
     
     if(matches.size() == 0){
         errorFlag = 1;
@@ -295,7 +318,54 @@ cv::Mat localize( cv::Mat img_object , std::vector<cv::KeyPoint> keypoints_objec
     
     return img_matches;
 }
+*/
+void templateMatch(cv::Mat img, cv::Mat templ)
+{
+    using namespace std;
+    using namespace cv;
+    
+    Mat result;
+    int match_method = CV_TM_SQDIFF_NORMED;
+    /// Source image to display
+    Mat img_display;
+    img.copyTo( img_display );
+    
+    /// Create the result matrix
+    int result_cols =  img.cols - templ.cols + 1;
+    int result_rows = img.rows - templ.rows + 1;
+    
+    result.create( result_rows, result_cols, CV_32FC1 );
+    
+    /// Do the Matching and Normalize
+    matchTemplate( img, templ, result, match_method );
+    normalize( result, result, 0, 1, NORM_MINMAX, -1, Mat() );
+    
+    /// Localizing the best match with minMaxLoc
+    double minVal; double maxVal; Point minLoc; Point maxLoc;
+    Point matchLoc;
+    
+    minMaxLoc( result, &minVal, &maxVal, &minLoc, &maxLoc, Mat() );
+    matchLoc = minLoc;
+    
+    minVal = abs(minVal); //am i losing important info here?
+    
+    if((minVal > THRESHOLD) || (minVal<=0)){
+        return;
+    }
+    
+    rectangle( img_display, matchLoc, Point( matchLoc.x + templ.cols , matchLoc.y + templ.rows ), Scalar::all(255), 2, 8, 0 );
+    
+    namedWindow("Match");
+    imshow( "Match", img_display );
+    waitKey(0);
+    destroyWindow("Match");
+    
+    return;
+}
 
+
+/*
+********ALSO FOR KEYPOINT MATCHING. MAY NEED TO FALL BACK ON THIS SOMEDAY, SO LEAVING IN********
 //still working out what this can do
 //some dude on the interweb said it can help with descriptor matching
 void cornerHarrisDemo( int, char* filename, void* )
@@ -341,3 +411,4 @@ void cornerHarrisDemo( int, char* filename, void* )
     waitKey(0);
     using namespace std;
 }
+ */

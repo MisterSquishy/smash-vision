@@ -60,7 +60,7 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "/Users/peterdavids/Desktop/Projects/smashProj/smashProj/pikachu.png"
+            argument = "/Users/peterdavids/Desktop/Projects/smashProj/smashProj/fox.png"
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
