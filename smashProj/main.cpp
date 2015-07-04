@@ -9,7 +9,7 @@ std::vector< cv::DMatch > match( cv::Mat descriptors_object , cv::Mat descriptor
 cv::Mat localize( cv::Mat img_object , std::vector<cv::KeyPoint> keypoints_object , cv::Mat img_scene , std::vector<cv::KeyPoint> keypoints_scene , std::vector< cv::DMatch > matches, bool debug = false);
 
 int errorFlag = 0;                  //error flag
-const int STARTFRAME = 172;         //what frame should we start on?
+const int STARTFRAME = 0;         //what frame should we start on?
 float avgDistance;                  //should we find a match, how good is it?
 
 int main(int argc, char **argv)
@@ -58,8 +58,8 @@ int main(int argc, char **argv)
         
         //-- Step 2: Calculate descriptors using SURF extractor
         
-        cv::Mat descriptors_object = getDescriptors( 1, img_object, keypoints_object , false );
-        cv::Mat descriptors_scene = getDescriptors( 1, img_scene, keypoints_scene , false );
+        cv::Mat descriptors_object = getDescriptors( 1, img_object, keypoints_object  );
+        cv::Mat descriptors_scene = getDescriptors( 1, img_scene, keypoints_scene  );
         
         switch(errorFlag){
             case 0 : break;
@@ -76,14 +76,8 @@ int main(int argc, char **argv)
         
         //-- Step 3: Matching descriptor vectors using FLANN matcher
         
-        std::vector< cv::DMatch > good_matches = match( descriptors_object, descriptors_scene , false );
+        std::vector< cv::DMatch > good_matches = match( descriptors_object, descriptors_scene , tracker.getCurrentFrameNumber() == 172 );
         
-        if(good_matches.size() == 0){//add better error handling
-            std::cout << "No good matches...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
-            tracker.nextFrame();
-            img_scene = tracker.getCurrentFrame();
-            continue;
-        }
         
         switch(errorFlag){
             case 0 : break;
@@ -111,6 +105,9 @@ int main(int argc, char **argv)
                 break;
             case 2 :
                 std::cout << "No homography found...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
+                break;
+            case 3 :
+                std::cout << "I wasn't confident...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
                 break;
         }
         if(errorFlag > 0){
@@ -159,7 +156,7 @@ std::vector<cv::KeyPoint> detectKeypoints( int minHessian, cv::Mat img , std::ve
         Mat tmp;
         cv::cvtColor(img , img , CV_RGBA2RGB);
         drawKeypoints( img, keypoints, tmp, Scalar::all(-1), DrawMatchesFlags::DEFAULT );
-        imshow("keypoints", tmp );
+        imshow( "keypoints", tmp );
         waitKey(0);
     }
     
@@ -232,7 +229,7 @@ std::vector< cv::DMatch > match( cv::Mat descriptors_object , cv::Mat descriptor
         errorFlag = 2;
     }
     else{
-        avgDistance = avgDistance/descriptors_object.rows;
+        avgDistance = avgDistance/good_matches.size();
     }
     
     if(debug){
@@ -271,8 +268,14 @@ cv::Mat localize( cv::Mat img_object , std::vector<cv::KeyPoint> keypoints_objec
     obj_corners[2] = cvPoint( img_object.cols, img_object.rows ); obj_corners[3] = cvPoint( 0, img_object.rows );
     std::vector<cv::Point2f> scene_corners(4);
     
-    if(H.rows == 0){//sometimes there just isnt any kind of match at all
+    if(H.empty()){//sometimes there just isnt any kind of match at all
         errorFlag = 2;
+        return H;
+    }
+    
+    if(findFundamentalMat(obj, scene, cv::FM_RANSAC, 3, 0.99, cv::noArray()).empty()){//trying to use this to filter outliers
+        errorFlag = 3;
+        return H;
     }
     
     perspectiveTransform( obj_corners, scene_corners, H);
