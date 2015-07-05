@@ -1,4 +1,5 @@
 #include "ObjectTracker.h"
+
 /*
  ********FUNCTIONS ARE REMNANTS OF THE KEYPOINT MATCHING METHOD. MAY NEED TO FALL BACK ON THIS FOR SCALE INVARIANT MATCHING , SO LEAVING IN********
  
@@ -10,27 +11,29 @@ std::vector< cv::DMatch > match( cv::Mat descriptors_object , cv::Mat descriptor
 
 cv::Mat localize( cv::Mat img_object , std::vector<cv::KeyPoint> keypoints_object , cv::Mat img_scene , std::vector<cv::KeyPoint> keypoints_scene , std::vector< cv::DMatch > matches, bool debug = false);
 */
-void templateMatch(cv::Mat img, cv::Mat templ);
+std::pair<double,cv::Point>* templateMatch(cv::Mat img, cv::Mat templ, bool relaxed = false);
+float getScale(cv::Mat);
+int readCountdown(cv::Mat scene);
 
 int errorFlag = 0;                  //error flag
 const int STARTFRAME = 0;         //what frame should we start on?
 float avgDistance;                  //should we find a match, how good is it?
-float THRESHOLD = .00000003;         //minimum acceptable template match accuracy
+float THRESHOLD = .3;         //minimum acceptable template match accuracy
+
+float videoScale;
+float game_start_time;
+
+using namespace cv;
+using namespace std;
 
 int main(int argc, char **argv)
 {
-    if (argc != 3)                  //user fucked up arguments
-    {
-       printf("pass 2 arguments dude");
-       return 0;
-    }
-    
-    std::string filename = std::string(argv[2]);        //get video filename
+    std::string filename = "/Users/peterdavids/Desktop/Projects/smashProj/smashProj/Resources/match.mp4";
     
     vision::ObjectTracker tracker(filename);            //init tracker, will give us img_scene values
     
-    cv::Mat img_object = cv::imread( argv[1] , 1 );    //read image w/o alpha channel
-    cv::Mat img_scene = tracker.getCurrentFrame();      //img_scene points to first frame
+    Mat img_object = imread("/Users/peterdavids/Desktop/Projects/smashProj/smashProj/Resources/pikachu.png",1);
+    Mat img_scene = tracker.getCurrentFrame();      //img_scene points to first frame
     
     //std::vector<cv::Mat> null;
     //std::vector<cv::Mat> ch;
@@ -40,15 +43,26 @@ int main(int argc, char **argv)
         tracker.nextFrame();
     }
     
-    using namespace cv;
+    namedWindow("Frame " + to_string(tracker.getCurrentFrameNumber()));
     
-    namedWindow("Frame " + std::to_string(tracker.getCurrentFrameNumber()));
+    pair<double,Point> matchPoint;
     
     while(true) //iterate over frames
     {
-        imshow("Frame " + std::to_string(tracker.getCurrentFrameNumber()), img_scene );
-        destroyWindow("Frame " + std::to_string(tracker.getCurrentFrameNumber()-1));
-        templateMatch(img_scene, img_object);
+        imshow("Frame " + to_string(tracker.getCurrentFrameNumber()), img_scene );
+        destroyWindow("Frame " + to_string(tracker.getCurrentFrameNumber()-1));
+        matchPoint = *templateMatch(img_scene, img_object);
+        if(matchPoint.first > 0){
+            //display result
+            rectangle(img_scene, matchPoint.second, Point( matchPoint.second.x + img_object.cols , matchPoint.second.y + img_object.rows ), Scalar::all(255), 2, 8, 0 );
+            
+            namedWindow("Match: " + to_string((1-matchPoint.first)*100) + "% certainty"); //this whole % certainty thing is probably BS, just want to display match accuracy in percent form to make it human-readable
+            imshow( "Match: " + to_string((1-matchPoint.first)*100) + "% certainty", img_scene );
+            waitKey(0);
+            destroyWindow("Match: "+ to_string((1-matchPoint.first)*100) + "% certainty" );
+            
+            //use tracker.getCurrentTime and reading the first frame that time != 08:00 to try and figure out what time the game starts at (can't use pre-game countdown because it is a total lie (nice job smash developers))
+        }
         std::cout << "Next frame...(" << tracker.getCurrentFrameNumber() << ")" << std::endl;
         tracker.nextFrame();
         img_scene = tracker.getCurrentFrame();
@@ -319,7 +333,7 @@ cv::Mat localize( cv::Mat img_object , std::vector<cv::KeyPoint> keypoints_objec
     return img_matches;
 }
 */
-void templateMatch(cv::Mat img, cv::Mat templ)
+pair<double,Point>* templateMatch(cv::Mat img, cv::Mat templ, bool relaxed)
 {
     using namespace std;
     using namespace cv;
@@ -338,29 +352,49 @@ void templateMatch(cv::Mat img, cv::Mat templ)
     
     /// Do the Matching and Normalize
     matchTemplate( img, templ, result, match_method );
-    normalize( result, result, 0, 1, NORM_MINMAX, -1, Mat() );
+    //normalize( result, result, 0, 1, NORM_MINMAX, -1, Mat() );
     
     /// Localizing the best match with minMaxLoc
-    double minVal; double maxVal; Point minLoc; Point maxLoc;
+    double minVal = 0; Point minLoc = *new Point;
     Point matchLoc;
     
-    minMaxLoc( result, &minVal, &maxVal, &minLoc, &maxLoc, Mat() );
+    minMaxLoc( result, &minVal, NULL, &minLoc, NULL, Mat() );
     matchLoc = minLoc;
     
     minVal = abs(minVal); //am i losing important info here?
     
-    if((minVal > THRESHOLD) || (minVal<=0)){
-        return;
+    if(!relaxed && (minVal > THRESHOLD)){//returns 0,null if threshold violated
+        return new pair<double,Point>;
     }
     
-    rectangle( img_display, matchLoc, Point( matchLoc.x + templ.cols , matchLoc.y + templ.rows ), Scalar::all(255), 2, 8, 0 );
+    pair<double,Point>* returnPair = new pair<double,Point>;
+    returnPair->first = minVal;
+    returnPair->second = matchLoc;
     
-    namedWindow("Match");
-    imshow( "Match", img_display );
-    waitKey(0);
-    destroyWindow("Match");
+    return returnPair;
+}
+
+/*
+ This function is only necessary if different input videos have the game window at different sizes. I have no idea if this happens. If we find later that it does, we can use this function to figure out what to scale everything by (only relevant to reading the HUD, since characters are going to change scale regardless of window size)
+*/
+
+float getScale(cv::Mat scene)
+{
+    Mat scaleR = imread("/Users/peterdavids/Desktop/Projects/smashProj/smashProj/Resources/scaleR.png",1),resizedScaleR;
+    Size size = scaleR.size();
+    double scaleMatch,bestScaleMatch = 100;
+    float bestScale = 0;
+    for(float i=.5 ; i <= 2 ; i = i+.05)
+    {
+        resize(scaleR, resizedScaleR, cvSize(size.width * i, size.height * i));
+        scaleMatch = templateMatch(scene,resizedScaleR,true)->first;
+        if((scaleMatch < bestScaleMatch) && scaleMatch > 0){
+            bestScaleMatch = scaleMatch;
+            bestScale = i;
+        }
+    }
     
-    return;
+    return bestScale;
 }
 
 

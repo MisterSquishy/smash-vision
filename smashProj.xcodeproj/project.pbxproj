@@ -38,7 +38,7 @@
 		5E094BD41B35BE56006A028D /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
-			dstPath = /usr/share/man/man1/;
+			dstPath = /usr/share/man/man1;
 			dstSubfolderSpec = 0;
 			files = (
 			);
@@ -67,12 +67,13 @@
 		5E094C0E1B35FCE7006A028D /* libopencv_features2d.3.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libopencv_features2d.3.0.0.dylib; sourceTree = "<group>"; };
 		5E094C101B35FD15006A028D /* libopencv_stitching.3.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libopencv_stitching.3.0.0.dylib; sourceTree = "<group>"; };
 		5E094C121B360F8D006A028D /* libopencv_xfeatures2d.3.0.0.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libopencv_xfeatures2d.3.0.0.dylib; sourceTree = "<group>"; };
+		5E0DA3361B49C71D009A26BF /* fox.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = fox.png; path = /Users/peterdavids/Desktop/Projects/smashProj/smashProj/Resources/fox.png; sourceTree = "<absolute>"; };
+		5E0DA3371B49C71D009A26BF /* match.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = match.mp4; sourceTree = "<group>"; };
+		5E0DA3381B49C71D009A26BF /* pikachu.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = pikachu.png; sourceTree = "<group>"; };
+		5E0DA3391B49C71D009A26BF /* scaleR.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = scaleR.png; sourceTree = "<group>"; };
 		5E10A5E11B44C4190010F5EA /* smashproject 19.25.56.rtf */ = {isa = PBXFileReference; lastKnownFileType = text.rtf; name = "smashproject 19.25.56.rtf"; path = "smashProj.xcodeproj/smashproject 19.25.56.rtf"; sourceTree = "<group>"; };
 		5E10A5E21B44C4190010F5EA /* datamodeloutline.xlsx */ = {isa = PBXFileReference; lastKnownFileType = file; name = datamodeloutline.xlsx; path = smashProj.xcodeproj/datamodeloutline.xlsx; sourceTree = "<group>"; };
-		5E245F941B44C2C2004C5C35 /* fox.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = fox.png; sourceTree = "<group>"; };
-		5E245F951B44C2C2004C5C35 /* pikachu.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = pikachu.png; sourceTree = "<group>"; };
-		5E245F961B44C2C2004C5C35 /* match.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file; path = match.mp4; sourceTree = "<group>"; };
-		5E7ED2DB1B3BAED900AE09D3 /* main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+		5E7ED2DB1B3BAED900AE09D3 /* main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = main.cpp; path = /Users/peterdavids/Desktop/Projects/smashProj/smashProj/main.cpp; sourceTree = "<absolute>"; };
 		5EDE53241B3A51C8003BD35A /* TrackingParticleFilter.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = TrackingParticleFilter.cpp; sourceTree = "<group>"; };
 		5EDE53251B3A51C8003BD35A /* TrackingParticleFilter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TrackingParticleFilter.h; sourceTree = "<group>"; };
 		5EDE53271B3A5204003BD35A /* HsvHistogram.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = HsvHistogram.cpp; sourceTree = "<group>"; };
@@ -121,6 +122,7 @@
 			children = (
 				5E10A5E11B44C4190010F5EA /* smashproject 19.25.56.rtf */,
 				5E10A5E21B44C4190010F5EA /* datamodeloutline.xlsx */,
+				5E4CFE771B49C26900DB29D7 /* Resources */,
 				5E094BF01B35BF53006A028D /* OpenCV libraries */,
 				5E094BD81B35BE57006A028D /* smashProj */,
 				5E094BD71B35BE57006A028D /* Products */,
@@ -139,19 +141,16 @@
 		5E094BD81B35BE57006A028D /* smashProj */ = {
 			isa = PBXGroup;
 			children = (
-				5E245F941B44C2C2004C5C35 /* fox.png */,
-				5E245F951B44C2C2004C5C35 /* pikachu.png */,
-				5E245F961B44C2C2004C5C35 /* match.mp4 */,
+				5E7ED2DB1B3BAED900AE09D3 /* main.cpp */,
+				5EDE53291B3A5204003BD35A /* ObjectTracker.h */,
+				5EDE532D1B3A5204003BD35A /* ObjectTracker.cpp */,
 				5EDE532A1B3A5204003BD35A /* Common.h */,
 				5EDE532B1B3A5204003BD35A /* HsvHistogram.h */,
 				5EDE53271B3A5204003BD35A /* HsvHistogram.cpp */,
 				5EDE532C1B3A5204003BD35A /* LineHoughTransform.h */,
 				5EDE53281B3A5204003BD35A /* LineHoughTransform.cpp */,
-				5EDE53291B3A5204003BD35A /* ObjectTracker.h */,
-				5EDE532D1B3A5204003BD35A /* ObjectTracker.cpp */,
 				5EDE53251B3A51C8003BD35A /* TrackingParticleFilter.h */,
 				5EDE53241B3A51C8003BD35A /* TrackingParticleFilter.cpp */,
-				5E7ED2DB1B3BAED900AE09D3 /* main.cpp */,
 			);
 			path = smashProj;
 			sourceTree = "<group>";
@@ -189,6 +188,18 @@
 			);
 			name = Frameworks;
 			path = smashProj.xcodeproj;
+			sourceTree = "<group>";
+		};
+		5E4CFE771B49C26900DB29D7 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				5E0DA3361B49C71D009A26BF /* fox.png */,
+				5E0DA3371B49C71D009A26BF /* match.mp4 */,
+				5E0DA3381B49C71D009A26BF /* pikachu.png */,
+				5E0DA3391B49C71D009A26BF /* scaleR.png */,
+			);
+			name = Resources;
+			path = smashProj/Resources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
